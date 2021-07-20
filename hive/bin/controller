@@ -10,8 +10,9 @@
 #
 
 
+# shellcheck disable=SC2034
 readonly script_mission='Client for ASICs: Routine controller'
-readonly script_version='2.3.8'
+readonly script_version='2.4.5'
 readonly script_basename="${0##*/}"
 #
 readonly script_DEBUG="${script_DEBUG:-0}" # use value from env if exists
@@ -96,7 +97,8 @@ function initialize_dictionaries {																	(( script_DEBUG )) && debugch
 	declare -r -A -g date_formats_dictionary=(
 		['list_by_incidence']='ISO_8601_old perl syslog BusyBox'
 
-		['ISO_8601_old'.RE]="^$F $T"		# 2020-01-18 05:08:13				(19 chars)
+		['ISO_8601_old'.RE]="^\[?$F $T\]?"	# 2020-01-18 05:08:13				(19 chars)
+											# [2020-01-18 05:08:13]				(21 chars)	note: a brand new timestamp format found in watchdog.log on L3+
 		['ISO_8601_old'.pattern]='F T'
 
 		['perl'.RE]="^$a $b $e $T $Y"		# Sun Jan  6 21:29:57 2020			(24 chars)
@@ -107,46 +109,46 @@ function initialize_dictionaries {																	(( script_DEBUG )) && debugch
 
 		['BusyBox'.RE]="^$a $b $e $T $Z $Y"	# Fri Apr  3 07:29:28 Europe 2020	(31 char)
 		['BusyBox'.pattern]='a b e T Z Y'
-	)										# in use in:	split_log_line_to_date_and_message
+	)										# in use in:	split_log_line_to_date_and_message()
 
 	declare -r -A -g translate_month_name_to_number_dictionary=(
 		['Jan']=1 ['Feb']=2 ['Mar']=3 ['Apr']=4  ['May']=5 ['Jun']=6
 		['Jul']=7 ['Aug']=8 ['Sep']=9 ['Oct']=10 ['Nov']=11 ['Dec']=12
 		['unknown']=0
-	)										# in use in:	split_log_line_to_date_and_message
+	)										# in use in:	split_log_line_to_date_and_message()
 
 	# global var hashtables
 
 	# shellcheck disable=SC2034
-	declare -A -g file_attribute			# in use in:	get_new_lines_from_log
+	declare -A -g file_attribute			# in use in:	get_new_lines_from_log()
 
-	declare -A -g checkup_counters			# in use in:	is_checkup_counter_set
-											#				get_checkup_counter
-											#				set_checkup_counter
-											#				increment_checkup_counter
-											#				reset_checkup_counter
-											#				list_checkup_counters
+	declare -A -g checkup_counters			# in use in:	is_checkup_counter_set()
+											#				get_checkup_counter()
+											#				set_checkup_counter()
+											#				increment_checkup_counter()
+											#				reset_checkup_counter()
+											#				list_checkup_counters()
 											#
-											#				print_checkup_summary_report
+											#				print_checkup_summary_report()
 }
 
 
 #
 # all about hashtables
 #
-# generate_hash_key
-# is_hash_key_set
-# get_hash_value
-# set_hash_value
+# generate_hash_key()
+# is_hash_key_set()
+# get_hash_value()
+# set_hash_value()
 #
 # TODO refactor underlying functions to be a more uniform?
 #
-# is_checkup_counter_set
-# get_checkup_counter
-# set_checkup_counter
-# increment_checkup_counter
-# reset_checkup_counter
-# list_checkup_counters
+# is_checkup_counter_set()
+# get_checkup_counter()
+# set_checkup_counter()
+# increment_checkup_counter()
+# reset_checkup_counter()
+# list_checkup_counters()
 #
 
 function generate_hash_key {																		(( script_DEBUG )) && debugcho "$@"
@@ -369,7 +371,7 @@ function list_checkup_counters {																	(( script_DEBUG )) && debugcho
 
 	# vars
 
-	local -A checkups_list=()
+	local -A checkups_list_HASH=()
 	local this_checkup_counter this_checkup_name
 
 	# code
@@ -377,27 +379,27 @@ function list_checkup_counters {																	(( script_DEBUG )) && debugcho
 	# get unique keys to hashtable
 	for this_checkup_counter in "${!checkup_counters[@]}"; do
 		this_checkup_name="${this_checkup_counter%%${unique_delimiter}*}" # cut all after delimiter (and delimiter too), leave only checkup name
-		checkups_list["$this_checkup_name"]='' # ...or any char you want, doesn't matter
+		checkups_list_HASH["$this_checkup_name"]='' # ...or any char you want, doesn't matter
 	done
 
 	# print hashtable keys sorted
 	#while read -r this_checkup_name; do
 	#	echo "$this_checkup_name"
-	#done < <( printf '%s\n' "${!checkups_list[@]}" | sort ) # oh man, why so complex?
+	#done < <( printf '%s\n' "${!checkups_list_HASH[@]}" | sort ) # oh man, why so complex?
 
-	printf '%s\n' "${!checkups_list[@]}" | sort
+	printf '%s\n' "${!checkups_list_HASH[@]}" | sort
 }
 
 
 #
 # logs processing:
 #
-# split_log_line_to_date_and_message
-# filter_lines_send_messages
-# get_new_lines_from_log
-# print_last_lines_from_own_log
-# print_controller_log_entry
-# shrink_system_logs
+# split_log_line_to_date_and_message()
+# filter_lines_send_messages()
+# get_new_lines_from_log()
+# print_last_lines_from_own_log()
+# print_controller_log_entry()
+# shrink_system_logs()
 #
 
 function split_log_line_to_date_and_message {														(( script_DEBUG )) && debugcho "$@"
@@ -430,6 +432,9 @@ function split_log_line_to_date_and_message {														(( script_DEBUG )) &&
 			[[ -z "${F-}" && -z "${m-}" ]] && printf -v m '%02u' "${translate_month_name_to_number_dictionary[${b-unknown}]}"
 			[[ -z "${F-}" && -z "${Y-}" ]] && printf -v Y '%(%Y)T' -1
 			[[ -z "${F-}" ]] && F="$Y-$m-$d"
+			# remove any square brackets
+			F="${F//[][]}"
+			T="${T//[][]}"
 			# shellcheck disable=SC2034
 			printf -v _log_date_by_ref '%-10.10s %-8.8s' "$F" "$T"
 			# shellcheck disable=SC2034
@@ -448,7 +453,9 @@ function filter_lines_send_messages {																(( script_DEBUG )) && debug
 
 	local -r -i send_messages_enabled=1
 	local -r message_body_template='Log:  <strong>%b</strong>\nDate: %s\nType: %s<hr><h3>%b</h3>%b'
-	local -r valid_chain_number_RE='^[0-9]+$'
+	# shellcheck disable=SC2154
+	# bc defined in the library
+	local -r valid_chain_number_RE="$positive_integer_RE"
 
 	# vars
 
@@ -938,23 +945,36 @@ function print_last_lines_from_own_log {															(( script_DEBUG )) && deb
 	local -r filter="${1-}"
 
 	# consts
+	local -r deprecated_controller_log='/config/hive-controller.log'
 
+	# RE
 	local -r filter_RE='(error|warning|Shrink log|Truncate log|selfupgrade|updated from|New date)'
 	#                                 | patterns from the legacy versions
 
+	# vars
+	local this_nvram_directory controller_log="$deprecated_controller_log"
+
 	# code
 
-	if [[ -s "$controller_log_file" ]]; then
+	# code
+	for this_nvram_directory in '/nvdata' '/opt' '/config'; do
+		if [[ -s "$this_nvram_directory/client-controller.log" ]]; then
+			controller_log="$this_nvram_directory/client-controller.log"
+			break
+		fi
+	done
+
+	if [[ -s "$controller_log" ]]; then
 		case "$filter" in
 			'all')
-				tail -n "$log_lines_to_tail" "$controller_log_file"
+				tail -n "$log_lines_to_tail" "$controller_log"
 				;;
 			''|*)
-				grep -Ev -e '^[[:space:]]' -- "$controller_log_file" | grep -Fv -e '> Sending ' -- | grep -Ei -e "$filter_RE" --
+				grep -Ev -e '^[[:space:]]' -- "$controller_log" | grep -Fv -e '> Sending ' -- | grep -Ei -e "$filter_RE" --
 				;;
 		esac
 	else
-		echo "$controller_log_file not found or empty"
+		echo "$controller_log not found or empty"
 	fi
 }
 
@@ -1037,17 +1057,17 @@ function wipe_memory {																				(( script_DEBUG )) && debugcho
 
 	# vars
 
-	local -a files_greater_than_1M
+	local -a files_greater_than_1mb_ARR=()
 	local -i this_file_size
 	local this_file
 
 	# code
 
-	files_greater_than_1M=( $( LANG=C du -h /tmp/* /var/log/* | awk '/^[0-9\.]+[MG]/{ print $2 }' ) )
+	readarray -t files_greater_than_1mb_ARR < <( LANG=C du -h /tmp/* /var/log/* | awk '/^[0-9\.]+[MG]/{ print $2 }' )
 
-	for this_file in "${files_greater_than_1M[@]}"; do
+	for this_file in "${files_greater_than_1mb_ARR[@]}"; do
 		this_file_size="$( get_file_size_in_bytes "$this_file" )"
-		print_controller_log_entry "$event_type_for_log" "Remove large file $this_file ($this_file_size bytes >= 1Mb)"
+		print_controller_log_entry "$event_type_for_log" "Removing a large log file $this_file ($this_file_size bytes >= 1 Mb)"
 		rm "$this_file"
 	done
 
@@ -1133,7 +1153,7 @@ function sync_time_via_hive_server { # not used atm
 		HIVE_HOST_URL='http://api.hiveos.farm'
 	fi
 	if server_answer="$( curl --silent --head "$HIVE_HOST_URL" 2>&1 )"; then
-		date_from_server_in_seconds="$( grep -F 'Date:' <<< "$server_answer" | cut -d' ' -f3-6 | timetran )"
+		date_from_server_in_seconds="$( grep -F -m 1 'Date:' <<< "$server_answer" | cut -d' ' -f3-6 | timetran )"
 		echo "Setting actual date from API server: $( date -s "@$date_from_server_in_seconds" )"
 	else
 		echo "Network is lost? Cannot get actual date from API server ($server_answer)"
@@ -1147,19 +1167,20 @@ function sync_time_via_hive_server { # not used atm
 #
 # routine functions executed by cron
 #
-# checkup:is_it_the_past
-# checkup:is_memory_full
-# checkup:is_miner_config_in_sync_with_FS
-# checkup:is_custom_fw_config_in_sync
-# checkup:is_build_updated
-# checkup:is_virus_found
-# checkup:is_there_JFFS2_error
-# checkup:is_NAND_in_RO_mode
-# checkup:is_overclock_profile_exist
-# checkup:are_logs_updated
-# execute:cache_hive_ip
-# execute:agent_screen_dontattach
-# print_checkup_summary_report
+# checkup:is_it_the_past()
+# checkup:is_NAND_has_enough_free_space()
+# checkup:is_RAM_full()
+# checkup:is_miner_config_in_sync_with_FS()
+# checkup:is_custom_fw_config_in_sync()
+# checkup:is_build_updated()
+# checkup:is_virus_found()
+# checkup:is_there_JFFS2_error()
+# checkup:is_NAND_in_RO_mode()
+# checkup:is_overclock_profile_exist()
+# checkup:are_logs_updated()
+# execute:cache_hive_ip()
+# execute:agent_screen_dontattach()
+# print_checkup_summary_report()
 #
 
 function checkup:is_it_the_past {																	(( script_DEBUG )) && debugcho
@@ -1171,7 +1192,7 @@ function checkup:is_it_the_past {																	(( script_DEBUG )) && debugcho
 
 	# vars
 
-	local HIVE_HOST_URL server_answer
+	local HIVE_HOST_URL server_answer date_from_server_raw
 	local -i current_year date_from_server_in_seconds
 	local -i is_something_happened=$(( exitcode_OK_NOTHING_HAPPENED ))
 
@@ -1179,7 +1200,7 @@ function checkup:is_it_the_past {																	(( script_DEBUG )) && debugcho
 
 	printf -v current_year '%(%Y)T' -1
 
-	if (( current_year < 2020 )); then
+	if (( current_year < 2021 )); then
 		is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 
 		HIVE_HOST_URL="$( [[ -s /hive-config/rig.conf ]] && source /hive-config/rig.conf && echo "${HIVE_HOST_URL-}" )"
@@ -1187,18 +1208,75 @@ function checkup:is_it_the_past {																	(( script_DEBUG )) && debugcho
 		if [[ -z ${HIVE_HOST_URL-} ]]; then
 			HIVE_HOST_URL='http://api.hiveos.farm'
 		fi
-		if server_answer="$( curl --silent --head "$HIVE_HOST_URL" 2>&1 )"; then
-			date_from_server_in_seconds="$( grep -F 'Date:' <<< "$server_answer" | cut -d' ' -f3-6 | timetran )"
-			print_controller_log_entry "$event_type_for_log" "System date year is $current_year. Getting actual date from server: $( date -s "@$date_from_server_in_seconds" )"
+		if server_answer="$( curl --silent --head "$HIVE_HOST_URL" 2>&1 )" && [[ -n "$server_answer" ]]; then
+			if date_from_server_raw="$( grep -F -m 1 'Date:' <<< "$server_answer" )" && [[ -n "$date_from_server_raw" ]]; then
+				if date_from_server_in_seconds="$( cut -d' ' -f3-6 <<< "$date_from_server_raw" | timetran 2> /dev/null )" && [[ "$date_from_server_in_seconds" =~ positive_integer_RE ]]; then
+					print_controller_log_entry "$event_type_for_log" "System date's year is $current_year. Getting actual date from server: $( date -s "@$date_from_server_in_seconds" )"
+				else
+					print_controller_log_entry "$event_type_for_log" "System date's year is $current_year. timetran failed ($server_answer)"
+				fi
+			else
+				print_controller_log_entry "$event_type_for_log" "System date's year is $current_year. Cannot get date from the server's answer, 'Date:' keyword absent ($server_answer)"
+			fi
 		else
-			print_controller_log_entry "$event_type_for_log" "System date year is $current_year. Network is lost, cannot get actual date from server ($server_answer)"
+			print_controller_log_entry "$event_type_for_log" "System date's year is $current_year. Network is lost, cannot get actual date from server ($server_answer)"
 		fi
 	fi
 
 	return $(( is_something_happened ))
 }
 
-function checkup:is_memory_full {																	(( script_DEBUG )) && debugcho
+function checkup:is_NAND_has_enough_free_space {													(( script_DEBUG )) && debugcho
+
+	# templates
+
+	local -r event_type_for_log='warning'		# error|warning|info
+	local -r event_type_for_message='warning'	# error|warning|info|success
+
+	# consts
+
+	local -r -i NAND_low_space_limit_in_kb=100
+
+	# arrays
+
+	local -a df_output_ARR=()
+
+	# vars
+
+	local -i is_something_happened=$(( exitcode_OK_NOTHING_HAPPENED ))
+	local _ NAND_free_space_in_kb
+
+	# code
+
+	# root@antminer:/# df -k /config (T17)
+	# Filesystem           1K-blocks      Used Available Use% Mounted on
+	# ubi0_0                     572        40       468   8% /config
+
+	# root@antminer:/# df -m /config
+	# Filesystem           1M-blocks      Used Available Use% Mounted on
+	# /dev/mtdblock9              20         8        12  38% /config
+	# [0]                         [1]        [2]      [3] [4] [5]
+
+	readarray -t df_output_ARR < <( df -k /config )
+	read -r _ _ _ NAND_free_space_in_kb _ <<< "${df_output_ARR[-1]}" # parse the last line
+
+	if [[ "$NAND_free_space_in_kb" =~ $positive_integer_RE ]]; then
+		if (( NAND_free_space_in_kb < NAND_low_space_limit_in_kb )); then
+			is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
+			print_controller_log_entry "$event_type_for_log" "/config directory running out of space: $NAND_free_space_in_kb Kb"
+			printf '%s\n' "${df_output_ARR[@]}" | tee >( message "$event_type_for_message" '/config directory running out of space. Click for technical details' --payload --silent )
+		else
+			: ok good to go
+		fi
+	else
+		is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
+		print_controller_log_entry "$event_type_for_log" "df bad output '$NAND_free_space_in_kb'"
+	fi
+
+	return $(( is_something_happened ))
+}
+
+function checkup:is_RAM_full {																		(( script_DEBUG )) && debugcho
 
 	# templates
 
@@ -1241,8 +1319,8 @@ function checkup:is_miner_config_in_sync_with_FS {													(( script_DEBUG )
 
 	# consts
 
-	local -r initial_crontab_entry="*/5 * * * *	$FUNCNAME"
-	local -r further_crontab_entry="@hourly		$FUNCNAME"
+	local -r initial_crontab_entry="*/5 * * * *	${FUNCNAME[0]}"
+	local -r further_crontab_entry="@hourly		${FUNCNAME[0]}"
 
 	# vars
 
@@ -1271,7 +1349,7 @@ function checkup:is_miner_config_in_sync_with_FS {													(( script_DEBUG )
 			for this_crontab_element in "${!crontab[@]}"; do
 				case "${crontab[this_crontab_element]}" in
 					"$initial_crontab_entry")	crontab[this_crontab_element]="$further_crontab_entry"
-												print_controller_log_entry 'info' "Adjusting crontab for '$FUNCNAME' to run once in an hour"
+												print_controller_log_entry 'info' "Adjusting crontab for '${FUNCNAME[0]}' to run once in an hour"
 												break											;;
 					"$further_crontab_entry")	break											;;
 				esac
@@ -1282,7 +1360,7 @@ function checkup:is_miner_config_in_sync_with_FS {													(( script_DEBUG )
 	return $(( is_something_happened ))
 }
 
-function checkup:is_custom_fw_config_in_sync {															(( script_DEBUG )) && debugcho
+function checkup:is_custom_fw_config_in_sync {														(( script_DEBUG )) && debugcho
 
 	# templates
 
@@ -1451,13 +1529,13 @@ function checkup:is_build_updated {																	(( script_DEBUG )) && debugc
 			is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 		fi
 	else
-		if (( $( get_checkup_counter "$FUNCNAME" 'actual_VERSION_file_missed' ) == 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'actual_VERSION_file_missed' ) == 0 )); then
 			# one time action
 			message_header="$actual_VERSION_file missed, please check"
 			print_controller_log_entry 'warning' "$message_header"
 			# shellcheck disable=SC2012
 			ls -ALl /hive/etc /hive-config | message 'warning' "$message_header" --payload --silent
-			set_checkup_counter "$FUNCNAME" 'actual_VERSION_file_missed' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'actual_VERSION_file_missed' 1
 		fi
 		is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 	fi
@@ -1492,31 +1570,31 @@ function checkup:is_virus_found {																	(( script_DEBUG )) && debugcho
 	# code
 
 	if is_program_in_the_PATH 'virus-check'; then
-		if (( $( get_checkup_counter "$FUNCNAME" 'program_not_found' ) > 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'program_not_found' ) > 0 )); then
 			# one time action
 			print_controller_log_entry 'info' "'virus-check' program found again"
-			set_checkup_counter "$FUNCNAME" 'program_not_found' 0
+			set_checkup_counter "${FUNCNAME[0]}" 'program_not_found' 0
 		fi
 	else
-		if (( $( get_checkup_counter "$FUNCNAME" 'program_not_found' ) == 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'program_not_found' ) == 0 )); then
 			# one time action
 			print_controller_log_entry 'error' "'virus-check' program not found"
-			set_checkup_counter "$FUNCNAME" 'program_not_found' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'program_not_found' 1
 		fi
 		return $(( exitcode_ERROR_NOT_FOUND ))
 	fi
 
 	if is_script_exist_and_doing_fine 'virus-check'; then
-		if (( $( get_checkup_counter "$FUNCNAME" 'program_goes_bananas' ) > 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'program_goes_bananas' ) > 0 )); then
 			# one time action
 			print_controller_log_entry 'info' "'virus-check' program back from bananaland"
-			set_checkup_counter "$FUNCNAME" 'program_goes_bananas' 0
+			set_checkup_counter "${FUNCNAME[0]}" 'program_goes_bananas' 0
 		fi
 	else
-		if (( $( get_checkup_counter "$FUNCNAME" 'program_goes_bananas' ) == 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'program_goes_bananas' ) == 0 )); then
 			# one time action
 			print_controller_log_entry 'error' "'virus-check' program goes bananas"
-			set_checkup_counter "$FUNCNAME" 'program_goes_bananas' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'program_goes_bananas' 1
 		fi
 		return $(( exitcode_ERROR_NOT_FOUND ))
 	fi
@@ -1539,7 +1617,7 @@ function checkup:is_virus_found {																	(( script_DEBUG )) && debugcho
 				tag_label="$tag_label_DANGER"
 				;;
 		esac
-		if (( $( get_checkup_counter "$FUNCNAME" 'message_sent' ) == 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'message_sent' ) == 0 )); then
 			# !!! flaw: if another virus will arise, no message will be sent till reboot
 			# one time action
 			print_controller_log_entry "$event_type_for_log" "$message_header"
@@ -1547,7 +1625,7 @@ function checkup:is_virus_found {																	(( script_DEBUG )) && debugcho
 			if (( assign_tag_to_worker )); then
 				message tag "$tag_label" --silent
 			fi
-			set_checkup_counter "$FUNCNAME" 'message_sent' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'message_sent' 1
 		fi
 		is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 	fi
@@ -1574,7 +1652,7 @@ function checkup:is_NAND_in_RO_mode {																(( script_DEBUG )) && debug
 
 	# code
 
-	if ! is_checkup_counter_set "$FUNCNAME" 'message_sent'; then
+	if ! is_checkup_counter_set "${FUNCNAME[0]}" 'message_sent'; then
 		# one time action
 		for directory_to_check in "${directories_on_NAND[@]}"; do
 			# check is directory exist
@@ -1598,7 +1676,7 @@ function checkup:is_NAND_in_RO_mode {																(( script_DEBUG )) && debug
 				message_header="Cannot write to $directory_to_check. NAND is in the read-only state, the ASIC may need a service"
 				print_controller_log_entry "$event_type_for_log" "$message_header"
 				message "$event_type_for_message" "$message_header" --silent
-				set_checkup_counter "$FUNCNAME" 'message_sent' 1
+				set_checkup_counter "${FUNCNAME[0]}" 'message_sent' 1
 				is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 			fi
 		done
@@ -1609,7 +1687,7 @@ function checkup:is_NAND_in_RO_mode {																(( script_DEBUG )) && debug
 	return $(( is_something_happened ))
 }
 
-function checkup:is_there_JFFS2_error {															(( script_DEBUG )) && debugcho
+function checkup:is_there_JFFS2_error {																(( script_DEBUG )) && debugcho
 
 	# templates
 
@@ -1628,13 +1706,13 @@ function checkup:is_there_JFFS2_error {															(( script_DEBUG )) && debu
 
 	# code
 
-	if ! is_checkup_counter_set "$FUNCNAME" 'message_sent'; then
+	if ! is_checkup_counter_set "${FUNCNAME[0]}" 'message_sent'; then
 		# one time action
 		if jffs2_errors_list="$( dmesg | grep -Ei "$jffs2_errors_RE" )" && [[ -n "$jffs2_errors_list" ]]; then
 			printf -v message_body "Mining is not affected (most likely). It could be in connection with an unclean reboot OR, rarely, with a NAND wear and tear. The first is completely harmless, but the second does suggest that the ASIC's control board may need a service or replacement in the very near future.\n\nErrors:\n\n%s" "$jffs2_errors_list"
 			print_controller_log_entry "$event_type_for_log" "$message_header"
 			message "$event_type_for_message" "$message_header" --silent --payload <<< "$message_body"
-			set_checkup_counter "$FUNCNAME" 'message_sent' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'message_sent' 1
 			is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 		fi
 	else
@@ -1671,18 +1749,18 @@ function checkup:is_overclock_profile_exist {														(( script_DEBUG )) &&
 	# ok, check the Series' number
 	if [[ "$ASIC_MODEL" =~ $is_series_17_RE ]]; then
 		if [[ ! -s "$oc_profile_file" ]]; then
-			if (( $( get_checkup_counter "$FUNCNAME" 'oc_profile_not_found' ) == 0 )); then
+			if (( $( get_checkup_counter "${FUNCNAME[0]}" 'oc_profile_not_found' ) == 0 )); then
 				# one time action
 				print_controller_log_entry "$event_type_for_log" 'OC profile not found or empty'
 				message "$event_type_for_message" "$message_header" --silent
-				set_checkup_counter "$FUNCNAME" 'oc_profile_not_found' 1
+				set_checkup_counter "${FUNCNAME[0]}" 'oc_profile_not_found' 1
 				is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 			fi
 		else
-			if (( $( get_checkup_counter "$FUNCNAME" 'oc_profile_not_found' ) > 0 )); then
+			if (( $( get_checkup_counter "${FUNCNAME[0]}" 'oc_profile_not_found' ) > 0 )); then
 				# one time action
 				print_controller_log_entry 'info' 'OC profile returns back'
-				set_checkup_counter "$FUNCNAME" 'oc_profile_not_found' 0
+				set_checkup_counter "${FUNCNAME[0]}" 'oc_profile_not_found' 0
 			fi
 		fi
 	fi
@@ -1705,18 +1783,18 @@ function checkup:is_fw_signed {																		(( script_DEBUG )) && debugcho
 	# code
 
 	if ! ant-functions.sh 'is_custom_fw_signed'; then
-		if (( $( get_checkup_counter "$FUNCNAME" 'fw_is_unsigned' ) == 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'fw_is_unsigned' ) == 0 )); then
 			# one time action
 			print_controller_log_entry "$event_type_for_log" 'Firmware is unsigned'
 			message "$event_type_for_message" "$message_header" --silent
-			set_checkup_counter "$FUNCNAME" 'fw_is_unsigned' 1
+			set_checkup_counter "${FUNCNAME[0]}" 'fw_is_unsigned' 1
 			is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
 		fi
 	else
-		if (( $( get_checkup_counter "$FUNCNAME" 'fw_is_unsigned' ) > 0 )); then
+		if (( $( get_checkup_counter "${FUNCNAME[0]}" 'fw_is_unsigned' ) > 0 )); then
 			# one time action
 			print_controller_log_entry 'info' 'Firmware is signed now'
-			set_checkup_counter "$FUNCNAME" 'fw_is_unsigned' 0
+			set_checkup_counter "${FUNCNAME[0]}" 'fw_is_unsigned' 0
 		fi
 	fi
 
@@ -1733,7 +1811,7 @@ function checkup:is_miner_niceness_ok {																(( script_DEBUG )) && deb
 
 	local this_pid
 	local -i this_pid_niceness
-	local -a proc_stat_parsed
+	local -a proc_stat_parsed_ARR=()
 
 	# flags
 
@@ -1749,8 +1827,8 @@ function checkup:is_miner_niceness_ok {																(( script_DEBUG )) && deb
 	# ok, check the Series' number
 	if [[ "$ASIC_MODEL" =~ $is_series_17_RE ]]; then
 		for this_pid in $( pidof bmminer cgminer ); do
-			if read -r -a proc_stat_parsed < "/proc/$this_pid/stat"; then
-				this_pid_niceness="${proc_stat_parsed[18]}"
+			if read -r -a proc_stat_parsed_ARR < "/proc/$this_pid/stat"; then
+				this_pid_niceness="${proc_stat_parsed_ARR[18]}"
 				if (( this_pid_niceness != -10 )); then
 					renice -10 "$this_pid"
 					is_something_happened=$(( exitcode_WARNING_SOMETHING_HAPPENED ))
@@ -1822,7 +1900,6 @@ function execute:agent_screen_dontattach {															(( script_DEBUG )) && d
 	return $(( is_something_happened ))
 }
 
-
 function print_checkup_summary_report {																(( script_DEBUG )) && debugcho
 
 	# templates
@@ -1832,24 +1909,24 @@ function print_checkup_summary_report {																(( script_DEBUG )) && deb
 
 	# vars
 
-	local -a checkups_list=()
+	local -a checkups_list_ARR=()
 	local this_checkup
 	local -i alarm_counter idle_counter total_counter
 	local -i number_of_alarmed_checkups=0 total_number_of_checkups=0
 
 	# code
 
-	readarray -t checkups_list < <( list_checkup_counters ) # you know, <<< $() operator is slower than < <()
+	readarray -t checkups_list_ARR < <( list_checkup_counters ) # you know, <<< $() operator is slower than < <()
 
 	# get number_of_alarmed_checkups
-	for this_checkup in "${checkups_list[@]}"; do
+	for this_checkup in "${checkups_list_ARR[@]}"; do
 		alarm_counter="$( get_checkup_counter "$this_checkup" 'alarm' )"
 		if (( alarm_counter != 0 )); then
 			(( number_of_alarmed_checkups++ ))
 		fi
 	done
 
-	total_number_of_checkups="${#checkups_list[@]}"
+	total_number_of_checkups="${#checkups_list_ARR[@]}"
 
 	if (( number_of_alarmed_checkups == 0 )); then
 		print_controller_log_entry "$event_type_for_log" 'Controller daily report: everything was OK over the past 24h'
@@ -1857,7 +1934,7 @@ function print_checkup_summary_report {																(( script_DEBUG )) && deb
 		print_controller_log_entry "$event_type_for_log" "Controller daily report, $number_of_alarmed_checkups/$total_number_of_checkups checkups involved:"
 
 		#printf '%33.33s %-35.35s %7.7s %7.7s\n' '' 'Checkup' 'Alarms' 'Total'
-		for this_checkup in "${checkups_list[@]}"; do
+		for this_checkup in "${checkups_list_ARR[@]}"; do
 			alarm_counter="$( get_checkup_counter "$this_checkup" 'alarm' )"
 			if (( alarm_counter != 0 )); then
 				idle_counter="$( get_checkup_counter "$this_checkup" 'idle' )"
@@ -1876,9 +1953,9 @@ function print_checkup_summary_report {																(( script_DEBUG )) && deb
 #
 # cron
 #
-# populate_array_with_actual_cron_jobs
-# wait_for_next_minute
-# do_cron_jobs_indefinitely
+# populate_array_with_actual_cron_jobs()
+# wait_for_next_minute()
+# do_cron_jobs_indefinitely()
 #
 
 function populate_array_with_actual_cron_jobs {														(( script_DEBUG )) && debugcho "$@"
@@ -1912,8 +1989,8 @@ function populate_array_with_actual_cron_jobs {														(( script_DEBUG )) 
 	# args
 
 	(( $# != 2 )) && { errcho 'invalid number of arguments'; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
-	local -r -n _crontab_array="${1-}" # by ref
-	local -r -n _jobs_to_do_array="${2-}" # by ref
+	local -r -n _crontab_ARR="${1-}" # by ref
+	local -r -n _jobs_to_do_ARR="${2-}" # by ref
 
 	# consts
 
@@ -1926,7 +2003,7 @@ function populate_array_with_actual_cron_jobs {														(( script_DEBUG )) 
 
 	# vars
 
-	local -a crontab_line_splitted
+	local -a crontab_line_splitted_ARR
 	local -i start_time line_iterator field_iterator this_field_time_value
 	local crontab_line_raw cmd_to_exec this_field
 
@@ -1934,36 +2011,36 @@ function populate_array_with_actual_cron_jobs {														(( script_DEBUG )) 
 
 	start_time="$( get_current_system_time_in_seconds )"
 
-	_jobs_to_do_array=() # reset jobs_to_do
+	_jobs_to_do_ARR=() # reset jobs_to_do
 
 	# for each crontab line
-	for (( line_iterator=0; line_iterator < ${#_crontab_array[@]}; line_iterator++ )); do
-		crontab_line_raw="${_crontab_array[line_iterator]}"
+	for (( line_iterator=0; line_iterator < ${#_crontab_ARR[@]}; line_iterator++ )); do
+		crontab_line_raw="${_crontab_ARR[line_iterator]}"
 
 		if [[ ! "$crontab_line_raw" =~ $valid_crontab_line_RE ]]; then
 			errcho "invalid crontab line '$crontab_line_raw'"
 			continue
 		fi
 
-		read -r -a crontab_line_splitted <<< "$crontab_line_raw"
+		read -r -a crontab_line_splitted_ARR <<< "$crontab_line_raw"
 
-		# transform specials
-		case "${crontab_line_splitted}" in
-			'@hourly')					crontab_line_splitted=( '0' '*' '*' '*' '*' "${crontab_line_splitted[@]:$H}" );;
-			'@daily' | '@midnight')		crontab_line_splitted=( '0' '0' '*' '*' '*' "${crontab_line_splitted[@]:$H}" );;
-			'@weekly')					crontab_line_splitted=( '0' '0' '*' '*' '0' "${crontab_line_splitted[@]:$H}" );;
-			'@monthly')					crontab_line_splitted=( '0' '0' '1' '*' '*' "${crontab_line_splitted[@]:$H}" );;
+		# transform the specials
+		case "${crontab_line_splitted_ARR[0]}" in
+			'@hourly')					crontab_line_splitted_ARR=( '0' '*' '*' '*' '*' "${crontab_line_splitted_ARR[@]:$H}" );;
+			'@daily' | '@midnight')		crontab_line_splitted_ARR=( '0' '0' '*' '*' '*' "${crontab_line_splitted_ARR[@]:$H}" );;
+			'@weekly')					crontab_line_splitted_ARR=( '0' '0' '*' '*' '0' "${crontab_line_splitted_ARR[@]:$H}" );;
+			'@monthly')					crontab_line_splitted_ARR=( '0' '0' '1' '*' '*' "${crontab_line_splitted_ARR[@]:$H}" );;
 		esac
 
 		# for each field in line
 		for (( field_iterator=0; field_iterator <= CMD; field_iterator++ )); do
 			if (( field_iterator == CMD )); then # add a command to array
-				cmd_to_exec="${crontab_line_splitted[*]:$CMD}" # note: *, not @
-				_jobs_to_do_array+=( "$cmd_to_exec" )
+				cmd_to_exec="${crontab_line_splitted_ARR[*]:$CMD}" # note: *, not @
+				_jobs_to_do_ARR+=( "$cmd_to_exec" )
 				break
 			fi
 
-			this_field="${crontab_line_splitted[field_iterator]}"
+			this_field="${crontab_line_splitted_ARR[field_iterator]}"
 			this_field_time_value="$( format_date_in_seconds "$start_time" "${cron_fields_dictionary[field_iterator]}" )"
 
 			if [[ "$this_field" =~ $asterisk_RE ]] && (( this_field_time_value % ${this_field##*/} != 0 )); then # handle * and */num
@@ -2002,7 +2079,7 @@ function do_cron_jobs_indefinitely {																(( script_DEBUG )) && debugc
 
 	# vars
 
-	local -a jobs_to_do=()
+	local -a jobs_to_do_ARR=()
 	local -i time_before_execution_in_s time_after_execution_in_s execution_time_in_s job_iterator
 	local current_process_list job_to_execute
 
@@ -2021,9 +2098,9 @@ function do_cron_jobs_indefinitely {																(( script_DEBUG )) && debugc
 			print_controller_log_entry "$event_type_for_log" "The Client starting, skipping checks..."
 		else
 			# do cron work
-			populate_array_with_actual_cron_jobs 'crontab' 'jobs_to_do'
-			for (( job_iterator=0; job_iterator < ${#jobs_to_do[@]}; job_iterator++ )); do
-				job_to_execute="${jobs_to_do[job_iterator]}"
+			populate_array_with_actual_cron_jobs 'crontab' 'jobs_to_do_ARR'
+			for (( job_iterator=0; job_iterator < ${#jobs_to_do_ARR[@]}; job_iterator++ )); do
+				job_to_execute="${jobs_to_do_ARR[job_iterator]}"
 				# !!! possible flaw: we have no any time limits here
 				eval "$job_to_execute"
 				# shellcheck disable=SC2181
@@ -2054,7 +2131,6 @@ function do_cron_jobs_indefinitely {																(( script_DEBUG )) && debugc
 
 declare -r -i assign_tag_to_worker=1 # can be in config file
 declare -r -i log_lines_to_tail=200
-declare -r controller_log_file='/config/hive-controller.log'
 declare -r unique_delimiter="d${RANDOM}e${RANDOM}l${RANDOM}i${RANDOM}m"
 
 declare -r -i exitcode_OK_NOTHING_HAPPENED=0
@@ -2065,9 +2141,9 @@ declare -r ntp_server='pool.ntp.org'
 
 # global sources
 
-source asic-model || echo 'ERROR: /hive/bin/asic-model not found'
-source colors || echo 'ERROR: /hive/bin/colors not found'
-source /hive/bin/hive-functions.sh || { echo 'ERROR: /hive/bin/hive-functions.sh not found'; exit 1; }
+source /hive/bin/asic-model			|| echo 'ERROR: /hive/bin/asic-model not found'
+source /hive/bin/colors				|| echo 'ERROR: /hive/bin/colors not found'
+source /hive/bin/hive-functions.sh	|| { echo 'ERROR: /hive/bin/hive-functions.sh not found'; exit 1; }
 
 
 # global exports
@@ -2090,12 +2166,13 @@ declare -a crontab=(
 	'* * * * *		checkup:are_logs_updated'
 	'* * * * *		checkup:is_overclock_profile_exist'
 	'* * * * *		checkup:is_custom_fw_config_in_sync'
-	'* * * * *		checkup:is_miner_niceness_ok'
+	'*/2 * * * *	checkup:is_miner_niceness_ok'
 	'*/2 * * * *	checkup:is_build_updated'
-	'*/2 * * * *	checkup:is_memory_full'
 	'*/5 * * * *	execute:agent_screen_dontattach'
 	'*/10 * * * *	checkup:is_it_the_past'
 	'*/10 * * * *	checkup:is_virus_found'
+	'@hourly		checkup:is_RAM_full'
+	'@hourly		checkup:is_NAND_has_enough_free_space'
 	'@hourly		checkup:is_there_JFFS2_error'
 	'@hourly		execute:cache_hive_ip'
 	'@midnight		checkup:is_NAND_in_RO_mode'

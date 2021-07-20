@@ -2,16 +2,16 @@
 
 
 #
-# Copyright (C) 2016-2020  Hiveon
-# Distributed under GNU GENERAL PUBLIC LICENSE 2.0
-# License information can be found in the LICENSE file or at https://github.com/minershive/hiveos-asic/blob/master/LICENSE.txt
+# Copyright (C) 2017  Hiveon Holding LTD
+# Distributed under Business Source License 1.1
+# License information can be found in the LICENSE.txt file or at https://github.com/minershive/hiveos-asic/blob/master/LICENSE.txt
 #
-# Linted by shellcheck 0.3.7
+# Linted by shellcheck 0.7.0 (80%)
 #
 
 
 declare -r hive_functions_lib_mission='Client for ASICs: Oh my handy little functions'
-declare -r hive_functions_lib_version='0.51.4'
+declare -r hive_functions_lib_version='0.55.0'
 #                                        ^^ current number of public functions
 
 
@@ -20,7 +20,28 @@ declare -r hive_functions_lib_version='0.51.4'
 
 
 #
+# all functions are divided by the next categories:
+#	SCRIPT INFRASTRUCTURE, LOGGING
+#	AUDIT
+#	CONDITIONALS
+#	MATH
+#	FILES
+#	DATE, TIME
+#	NETWORK
+#	TEXT, STRINGS
+#	PROCESSES
+#	SCREEN
+#	OTHER
+#
+
+
+#
 # functions: SCRIPT INFRASTRUCTURE, LOGGING
+#
+#	print_script_version
+#	errcho
+#	debugcho
+#	log_line
 #
 
 function print_script_version {
@@ -116,6 +137,9 @@ function log_line {
 # we need to audit externally--does the script work as intended or not (like the system returns exitcode "file not found")
 # [[ $( script_to_audit ) != 'I AM FINE' ]] && echo "Something wrong with $script_to_check"
 #
+#	print_i_am_doing_fine_then_exit
+#	is_script_exist_and_doing_fine
+#
 
 function print_i_am_doing_fine_then_exit {
 	#
@@ -147,6 +171,21 @@ function is_script_exist_and_doing_fine {
 
 #
 # functions: CONDITIONALS
+#
+#	iif
+#	iif_pipe
+#	is_program_in_the_PATH
+#	is_process_running
+#	is_process_not_running
+#	is_function_exist
+#	is_first_floating_number_bigger_than_second
+#	is_first_version_equal_to_second
+#	is_integer
+#	is_JSON_string_empty_or_null
+#	is_JSON_string_not_empty_or_null
+#	is_file_exist_but_empty
+#	is_file_exist_and_contain
+#	is_directory_exist_and_writable
 #
 
 function iif {
@@ -208,40 +247,40 @@ function is_program_in_the_PATH {
 	hash "$__program_name" 2> /dev/null
 }
 
-function is_program_running {
+function is_process_running {
 	#
-	# Usage: is_program_running 'program_name'
+	# Usage: is_process_running 'process_name'
 	#
 
 	# args
 
 	(( $# == 1 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
-	local -r program_name="${1-}"
+	local -r process_name="${1-}"
 
 	# code
 
 	if is_program_in_the_PATH 'pidof'; then
-		pidof "$program_name" > /dev/null
+		pidof "$process_name" > /dev/null
 	else
 		# shellcheck disable=SC2009
-		ps | grep -q "[${program_name:0:1}]${program_name:1}" # neat trick with '[p]attern'
+		ps | grep -q "[${process_name:0:1}]${process_name:1}" # neat trick with '[p]attern'
 		# ...bc we don't have pgrep
 	fi
 }
 
-function is_program_not_running {
+function is_process_not_running {
 	#
-	# Usage: is_program_not_running 'program_name'
+	# Usage: is_process_not_running 'process_name'
 	#
 
 	# args
 
 	(( $# == 1 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
-	local -r program_name="${1-}"
+	local -r process_name="${1-}"
 
 	# code
 
-	! is_program_running "$program_name"
+	! is_process_running "$process_name"
 }
 
 function is_function_exist {
@@ -290,6 +329,8 @@ function is_first_floating_number_bigger_than_second {
 function is_first_version_equal_to_second {
 	#
 	# Usage: is_first_version_equal_to_second 'first_version' 'second_version'
+	#
+	# Returns: exitcode_IS_EQUAL | exitcode_LESS_THAN | exitcode_GREATER_THAN
 	#
 
 	# args
@@ -410,10 +451,31 @@ function is_file_exist_and_contain {
 	[[ -s "$file_name_to_check" ]] && grep -q "$ERE_string_to_contain" "$file_name_to_check"
 }
 
+function is_directory_exist_and_writable {
+	#
+	# Usage: is_directory_exist_and_writable 'directory_to_check'
+	#
+
+	# args
+
+	(( $# == 1 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
+	local -r directory_to_check="${1-}"
+
+	# code
+
+	[[ -d "$directory_to_check" && -w "$directory_to_check" ]]
+}
+
 
 
 #
 # functions: MATH
+#
+#	calculate_percent_from_number
+#	set_bits_by_mask
+#	scientific_to_integer
+#	humanize
+#	khs_to_human_friendly_hashrate
 #
 
 function calculate_percent_from_number {
@@ -547,6 +609,12 @@ function khs_to_human_friendly_hashrate {
 
 #
 # functions: FILES
+#
+#	get_file_last_modified_time_in_seconds
+#	get_file_size_in_bytes
+#	read_variable_from_file
+#	read_variable_from_file_unsafe
+#	set_variable_in_file
 #
 
 function get_file_last_modified_time_in_seconds {
@@ -716,6 +784,15 @@ function set_variable_in_file {
 
 #
 # functions: DATE, TIME
+#
+#	get_system_boot_time_in_seconds
+#	get_current_system_time_in_seconds
+#	set_variable_to_current_system_time_in_seconds
+#	seconds2dhms
+#	format_date_in_seconds
+#	get_system_uptime_in_seconds
+#	get_system_uptime_in_milliseconds
+#	snore
 #
 
 function get_system_boot_time_in_seconds {
@@ -916,6 +993,12 @@ function snore {
 #
 # functions: NETWORK
 #
+#	is_interface_up
+#	is_tcp_port_listening
+#	get_ip_address
+#	get_ip_postfix_address
+#	get_mac_address
+#
 
 function is_interface_up {
 	#
@@ -938,6 +1021,48 @@ function is_interface_up {
 	fi
 }
 
+function is_tcp_port_listening {
+	#
+	# Usage: is_tcp_port_listening 'host' 'port'
+	#
+	# Exit codes:
+	#
+	# exitcode_PORT_IS_OPENED
+	# exitcode_PORT_IS_CLOSED
+	# exitcode_ERROR_HOST_NOT_FOUND
+	# exitcode_ERROR_SOMETHING_WEIRD
+
+	# args
+
+	(( $# == 2 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
+	local -r host_to_check="${1-}"
+	local -r port_to_check="${2-}"
+
+	# vars
+
+	local -i nc_exitcode
+
+	# code
+
+	(
+		exec 2> /dev/null # silence the "Terminated" message in this sub-shell if the timeout watchdog has been activated
+		/hive/bin/timeout -t 1 nc "$host_to_check" "$port_to_check" < /dev/null
+	)
+
+	# exit code:
+	# 0		port is opened
+	# 1		host not found, connection error
+	# 143	port is closed
+	nc_exitcode=$?
+
+	case "$nc_exitcode" in
+		0	)	return $(( exitcode_PORT_IS_OPENED ))			;;
+		1	)	return $(( exitcode_ERROR_HOST_NOT_FOUND ))		;;
+		143	)	return $(( exitcode_PORT_IS_CLOSED ))			;;
+		*	)	return $(( exitcode_ERROR_SOMETHING_WEIRD ))	;;
+	esac
+}
+
 # shellcheck disable=SC2120
 # bc $1 can be empty
 function get_ip_address {
@@ -954,6 +1079,29 @@ function get_ip_address {
 	# code
 
 	LANG=C ifconfig "$interface" | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1 }'
+}
+
+# shellcheck disable=SC2120
+# bc $1 can be empty
+function get_ip_postfix_address {
+	#
+	# Usage: get_ip_postfix_address ['interface']
+	#
+	# it does mimic a BTC Tools' "IP postfix" -- '192.168.12.13' becomes '12x13'
+
+	# args
+
+	(( $# == 0 || $# == 1 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
+	local -r interface_DEFAULT='eth0'
+	local -r interface="${1-$interface_DEFAULT}"
+
+	# vars
+
+	local -i octet_C=0 octet_D=0
+
+	# code
+
+	LANG=C ifconfig "$interface" | grep 'inet addr:' | { IFS=' :.' read -r _ _ _ _ octet_C octet_D _; echo "${octet_C}x${octet_D}"; }
 }
 
 # shellcheck disable=SC2120
@@ -978,6 +1126,14 @@ function get_mac_address {
 
 #
 # functions: TEXT, STRINGS
+#
+#	strip_ansi
+#	get_substring_position_in_string
+#	rematch
+#	get_all_matches
+#	get_all_matches_unique
+#	expand_hive_templates
+#	expand_hive_templates_in_variable_by_ref
 #
 
 function strip_ansi {
@@ -1135,7 +1291,7 @@ function expand_hive_templates_in_variable_by_ref {
 	# in a given string variable, expand all Hive templates:
 	#
 	#	sw/fw versions: %BUILD% %FW%
-	#	network:		%HOSTNAME% %IP% %MAC%
+	#	network:		%HOSTNAME% %IP% %IP_POSTFIX% %MAC%
 	#	OC profile:		%PROFILE%
 	#	RIG_CONF:		%URL% %WORKER_NAME% %WORKER_NAME_RAW%
 	#	WALLET_CONF:	%EMAIL% %EWAL% %DWAL% %ZWAL%
@@ -1163,9 +1319,6 @@ function expand_hive_templates_in_variable_by_ref {
 	local -r hard_sanitize_keyword_RE='_[Ss][Aa][Ff][Ee][Ss][Tt]%' # _SAFEST
 	local -r hard_sanitize_blacklisted_chars_RE='[^[:alnum:]]'
 	local -r hard_sanitize_replacement_char='x'
-
-	local -r safe_char='x'
-	local -r blacklisted_chars_RE='[^[:alnum:]_]'
 
 	# super local consts haha
 
@@ -1243,6 +1396,12 @@ function expand_hive_templates_in_variable_by_ref {
 				this_template_substitution="$( get_ip_address )"
 			;;
 
+			'IP_POSTFIX' )
+				# shellcheck disable=SC2119
+				# bc 'no arguments' does mean default interface
+				this_template_substitution="$( get_ip_postfix_address )"
+			;;
+
 			'MAC' )
 				# shellcheck disable=SC2119
 				# bc 'no arguments' does mean default interface
@@ -1300,6 +1459,10 @@ function expand_hive_templates_in_variable_by_ref {
 #
 # functions: PROCESSES
 #
+#	pgrep_count
+#	pgrep_quiet
+#	get_process_owner
+#
 
 function pgrep_count {
 	#
@@ -1319,8 +1482,8 @@ function pgrep_count {
 
 	# code
 
-	printf -v marker '%(%s)T-%s-%u%u' -1 "$FUNCNAME" "${RANDOM}" "${RANDOM}"
-#	self="${$}[[:space:]].+${FUNCNAME}" # TODO figure out what's best
+	printf -v marker '%(%s)T-%s-%u%u' -1 "${FUNCNAME[0]}" "${RANDOM}" "${RANDOM}"
+#	self="${$}[[:space:]].+${FUNCNAME[0]}" # TODO figure out what's best
 	self="(${$}|${BASHPID})[[:space:]].+$0"
 
 	ps w | tail -n +2 | grep -E -e "$pattern" -e "$marker" -- | grep -Evc -e "$marker" -e "$self" --
@@ -1344,17 +1507,38 @@ function pgrep_quiet {
 
 	# code
 
-	printf -v marker '%(%s)T:%s:%u%u' -1 "$FUNCNAME" "${RANDOM}" "${RANDOM}"
-	self="${$}[[:space:]].+${FUNCNAME}"
+	printf -v marker '%(%s)T:%s:%u%u' -1 "${FUNCNAME[0]}" "${RANDOM}" "${RANDOM}"
+	self="${$}[[:space:]].+${FUNCNAME[0]}"
 #	self="(${$}|${BASHPID})[[:space:]].+$0" # TODO figure out what's best
 
 	ps w | tail -n +2 | grep -E -e "$pattern" -e "$marker" -- | grep -Evq -e "$marker" -e "$self" --
+}
+
+function get_process_owner {
+	#
+	# Usage: get_process_owner 'process_name'
+	#
+
+	# args and asserts
+
+	(( $# == 1 )) || { errcho "invalid number of arguments: $#"; return $(( exitcode_ERROR_IN_ARGUMENTS )); }
+	local -r process_name="$1"
+
+	# code
+	if is_process_running "$process_name"; then
+		ps | awk "/$process_name/ && !/awk/ {print \$2}"
+		# TODO: could be improved like 'PID=pidof; stat --owner /proc/PID' (pseudo-code)
+	else
+		return $(( exitcode_ERROR_NOT_FOUND ))
+	fi
 }
 
 
 
 #
 # functions: SCREEN
+#
+#	is_screen_session_exist
 #
 
 function is_screen_session_exist {
@@ -1382,6 +1566,8 @@ function is_screen_session_exist {
 
 #
 # functions: OTHER
+#
+#	set_variable_to_terminal_width
 #
 
 function set_variable_to_terminal_width {
@@ -1438,7 +1624,7 @@ function __list_functions {
 	local -a all_functions_ARR=() private_functions_ARR=() public_functions_ARR=()
 	local -i public_functions_count
 	local -i terminal_width max_name_length
-	local -i columns_count max_columns this_column
+	local -i columns_count this_column
 	local -i rows_count this_row
 
 	# code
@@ -1452,7 +1638,7 @@ function __list_functions {
 		else
 			public_functions_ARR+=( "$this_function_name" )
 		fi
-		# shellcheck disable=SC1073,SC1072
+		# shellcheck disable=SC1073,SC1072,SC1105
 		((
 			${#this_function_name} > max_name_length ? max_name_length=${#this_function_name} : nil
 		))                                         # nice ternary trick -- the fake "else" part ^^^
@@ -1504,18 +1690,33 @@ function __list_functions {
 # consts
 
 declare -r __audit_ok_string='I AM DOING FINE'
-# shellcheck disable=SC2034
-declare -r -i exitcode_OK=0
-declare -r -i exitcode_NOT_OK=1
-declare -r -i exitcode_ERROR_NOT_FOUND=1
-declare -r -i exitcode_ERROR_IN_ARGUMENTS=127
-# shellcheck disable=SC2034
-declare -r -i exitcode_ERROR_SOMETHING_WEIRD=255
 
-declare -r -i exitcode_IS_EQUAL=0
-declare -r -i exitcode_GREATER_THAN=1
-declare -r -i exitcode_LESS_THAN=2
+# shellcheck disable=SC2034
+{
+	# enum exit codes
 
+	# common codes
+	declare -r -i exitcode_OK=0
+	declare -r -i exitcode_NOT_OK=1
+	declare -r -i exitcode_ERROR_NOT_FOUND=1
+	declare -r -i exitcode_ERROR_IN_ARGUMENTS=127
+	declare -r -i exitcode_ERROR_SOMETHING_WEIRD=255
+
+	# is_first_version_equal_to_second()
+	declare -r -i exitcode_IS_EQUAL=0
+	declare -r -i exitcode_GREATER_THAN=1
+	declare -r -i exitcode_LESS_THAN=2
+
+	# is_tcp_port_listening()
+	declare -r -i exitcode_PORT_IS_OPENED=0
+	declare -r -i exitcode_PORT_IS_CLOSED=1
+	declare -r -i exitcode_ERROR_HOST_NOT_FOUND=3
+
+	# regular expressions
+
+	declare -r positive_integer_RE='^[[:digit:]]+$'
+	declare -r empty_line_RE='^[[:space:]]*$'
+}
 
 
 # main
@@ -1527,7 +1728,7 @@ if ! ( return 0 2>/dev/null ); then # not sourced
 
 	case "$*" in
 		'')
-			source colors
+			source /hive/bin/colors
 			print_script_version
 			__list_functions
 			;;
@@ -1537,6 +1738,7 @@ if ! ( return 0 2>/dev/null ); then # not sourced
 				exit $? # do an explicit passing of the exit code
 			else
 				errcho "function '$1' is not defined"
+				exit $(( exitcode_ERROR_SOMETHING_WEIRD ))
 			fi
 			;;
 	esac
